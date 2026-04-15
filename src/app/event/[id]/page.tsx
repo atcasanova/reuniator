@@ -134,20 +134,6 @@ export default function EventPage() {
     });
   };
 
-  // Touch Move handler explicitly finding the element
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragSelecting) return;
-    e.preventDefault(); // Prevent scrolling while trying to select
-    const touch = e.touches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!el) return;
-    const dateAttr = el.getAttribute('data-date');
-    const timeAttr = el.getAttribute('data-time');
-    if (dateAttr && timeAttr) {
-      handleMove(dateAttr, timeAttr);
-    }
-  };
-
   const saveAvailability = async () => {
     if (!currentUser) return;
     setSaving(true);
@@ -189,8 +175,7 @@ export default function EventPage() {
       className="layout-container" 
       onMouseUp={handleEnd} 
       onMouseLeave={handleEnd} 
-      onTouchEnd={handleEnd}
-      style={{ userSelect: "none", touchAction: "pan-y" }}
+      style={{ userSelect: "none" }}
     >
       <h1 style={{ textAlign: "center", marginBottom: "0.5rem" }}>{eventData.title}</h1>
       <p style={{ textAlign: "center", color: "var(--text-muted)", marginBottom: "2rem" }}>
@@ -246,8 +231,7 @@ export default function EventPage() {
             </p>
             
             <div 
-              style={{ overflowX: "auto", paddingBottom: "10px", touchAction: "none" }}
-              onTouchMove={handleTouchMove}
+              style={{ overflowX: "auto", paddingBottom: "10px" }}
             >
               <div style={{ display: "flex", gap: "2px", minWidth: "max-content" }}>
                 <div style={{ width: "50px", flexShrink: 0 }} /> 
@@ -273,7 +257,6 @@ export default function EventPage() {
                         data-time={t}
                         onMouseDown={() => handleStart(d.date, t)}
                         onMouseEnter={() => handleMove(d.date, t)}
-                        onTouchStart={() => handleStart(d.date, t)}
                         style={{
                           width: "60px",
                           height: "36px", // Increased height for mobile!
