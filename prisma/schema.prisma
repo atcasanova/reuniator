@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id              String         @id @default(uuid())
+  title           String
+  creatorName     String
+  timezone        String         @default("UTC")
+  createdAt       DateTime       @default(now())
+  timeRangeStart  String         // e.g., "08:00"
+  timeRangeEnd    String         // e.g., "20:00"
+  days            EventDay[]
+  participants    Participant[]
+}
+
+model EventDay {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date      String   // "YYYY-MM-DD"
+}
+
+model Participant {
+  id             String         @id @default(uuid())
+  name           String
+  eventId        String
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  availabilities Availability[]
+}
+
+model Availability {
+  id            String       @id @default(uuid())
+  participantId String
+  participant   Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  date          String       // "YYYY-MM-DD"
+  time          String       // "HH:MM"
+
+  @@unique([participantId, date, time])
+}

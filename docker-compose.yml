@@ -1,0 +1,19 @@
+services:
+  reuniator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reuniator
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6742:6742"
+    volumes:
+      - reuniator_data:/app/prisma
+      - ./dev.db:/app/prisma/dev.db
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+
+volumes:
+  reuniator_data:
