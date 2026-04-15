@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function ScheduleConfigurator() {
+  const defaultTimeRangeStart = "09:00";
+  const defaultTimeRangeEnd = "17:00";
   const router = useRouter();
   const searchParams = useSearchParams();
   const title = searchParams.get("title");
@@ -16,8 +18,8 @@ function ScheduleConfigurator() {
   }, [title, router]);
 
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
-  const [timeRangeStart, setTimeRangeStart] = useState("09:00");
-  const [timeRangeEnd, setTimeRangeEnd] = useState("17:00");
+  const [timeRangeStart, setTimeRangeStart] = useState(defaultTimeRangeStart);
+  const [timeRangeEnd, setTimeRangeEnd] = useState(defaultTimeRangeEnd);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -83,7 +85,7 @@ function ScheduleConfigurator() {
       localStorage.setItem(`reuniator_creator_${data.id}`, "true");
       
       router.push(`/event/${data.id}`);
-    } catch (err) {
+    } catch {
       setError("Something went wrong while creating the event.");
       setIsSubmitting(false);
     }
@@ -98,6 +100,22 @@ function ScheduleConfigurator() {
       timeOptions.push(`${hours}:${mins}`);
     }
   }
+
+  const startOptions = timeOptions.filter((t) => t <= timeRangeEnd);
+  const endOptions = timeOptions.filter((t) => t >= timeRangeStart);
+  const hasCustomTimeRange =
+    timeRangeStart !== defaultTimeRangeStart || timeRangeEnd !== defaultTimeRangeEnd;
+
+  useEffect(() => {
+    if (timeRangeStart > timeRangeEnd) {
+      setTimeRangeEnd(timeRangeStart);
+    }
+  }, [timeRangeStart, timeRangeEnd]);
+
+  const resetTimeRange = () => {
+    setTimeRangeStart(defaultTimeRangeStart);
+    setTimeRangeEnd(defaultTimeRangeEnd);
+  };
 
   if (!title) return null;
 
@@ -174,7 +192,7 @@ function ScheduleConfigurator() {
                 value={timeRangeStart} 
                 onChange={(e) => setTimeRangeStart(e.target.value)}
               >
-                {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                {startOptions.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
 
@@ -185,9 +203,18 @@ function ScheduleConfigurator() {
                 value={timeRangeEnd} 
                 onChange={(e) => setTimeRangeEnd(e.target.value)}
               >
-                {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                {endOptions.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
+
+            <button
+              type="button"
+              onClick={resetTimeRange}
+              className="btn-secondary"
+              disabled={!hasCustomTimeRange}
+            >
+              Reset time range
+            </button>
 
             <div style={{ flexGrow: 1 }} />
             
