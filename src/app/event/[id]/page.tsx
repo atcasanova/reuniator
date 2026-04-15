@@ -26,6 +26,7 @@ export default function EventPage() {
   const [hoverStatus, setHoverStatus] = useState<{ visible: boolean, x: number, y: number, details: any } | null>(null);
   const [activeTab, setActiveTab] = useState<'yours' | 'group'>('yours');
   const [isCreator, setIsCreator] = useState(false);
+  const [isPaintMode, setIsPaintMode] = useState(false);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -134,6 +135,19 @@ export default function EventPage() {
     });
   };
 
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragSelecting || !isPaintMode) return;
+    e.preventDefault(); 
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!el) return;
+    const dateAttr = el.getAttribute('data-date');
+    const timeAttr = el.getAttribute('data-time');
+    if (dateAttr && timeAttr) {
+      handleMove(dateAttr, timeAttr);
+    }
+  };
+
   const saveAvailability = async () => {
     if (!currentUser) return;
     setSaving(true);
@@ -226,12 +240,31 @@ export default function EventPage() {
                 </button>
               </div>
             )}
+            
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem", gap: "10px" }} className="hide-on-desktop">
+              <button 
+                onClick={(e) => { e.preventDefault(); setIsPaintMode(false); }}
+                className={`btn-secondary`}
+                style={{ padding: "0.25rem 0.75rem", fontSize: "0.80rem", borderRadius: "16px", border: "1px solid var(--primary)", background: !isPaintMode ? "var(--primary)" : "rgba(255,255,255,0.05)", color: !isPaintMode ? "white" : "var(--text-muted)" }}
+              >
+                👆 Tocar e Rolar
+              </button>
+              <button 
+                onClick={(e) => { e.preventDefault(); setIsPaintMode(true); }}
+                className={`btn-secondary`}
+                style={{ padding: "0.25rem 0.75rem", fontSize: "0.80rem", borderRadius: "16px", border: "1px dashed var(--primary)", background: isPaintMode ? "var(--primary)" : "rgba(255,255,255,0.05)", color: isPaintMode ? "white" : "var(--text-muted)" }}
+              >
+                🖌️ Pintar Rápido
+              </button>
+            </div>
+
             <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-              Drag to select multiple slots
+              {isPaintMode ? "Arraste o dedo para preencher os horários em série." : "Toque nos horários individuais. Role a tela livremente."}
             </p>
             
             <div 
-              style={{ overflowX: "auto", paddingBottom: "10px" }}
+              style={{ overflowX: "auto", paddingBottom: "10px", touchAction: isPaintMode ? "none" : "auto" }}
+              onTouchMove={isPaintMode ? handleTouchMove : undefined}
             >
               <div style={{ display: "flex", gap: "2px", minWidth: "max-content" }}>
                 <div style={{ width: "50px", flexShrink: 0 }} /> 
@@ -257,6 +290,7 @@ export default function EventPage() {
                         data-time={t}
                         onMouseDown={() => handleStart(d.date, t)}
                         onMouseEnter={() => handleMove(d.date, t)}
+                        onTouchStart={isPaintMode ? () => handleStart(d.date, t) : undefined}
                         style={{
                           width: "60px",
                           height: "36px", // Increased height for mobile!
