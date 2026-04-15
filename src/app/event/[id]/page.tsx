@@ -241,7 +241,7 @@ export default function EventPage() {
               </div>
             )}
             
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem", gap: "10px" }} className="hide-on-desktop">
+            <div className="floating-actions-mobile hide-on-desktop">
               <button 
                 onClick={(e) => { e.preventDefault(); setIsPaintMode(false); }}
                 className={`btn-secondary`}
@@ -258,7 +258,7 @@ export default function EventPage() {
               </button>
             </div>
 
-            <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+            <p className="hide-on-desktop" style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
               {isPaintMode ? "Arraste o dedo para preencher os horários em série." : "Toque nos horários individuais. Role a tela livremente."}
             </p>
             

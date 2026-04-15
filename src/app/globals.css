@@ -190,6 +190,27 @@ h3 { font-size: 1.5rem; font-weight: 500; }
   .mobile-tabs {
     display: none !important;
   }
+  .hide-on-desktop {
+    display: none !important;
+  }
+}
+
+.floating-actions-mobile {
+  display: flex !important;
+  justify-content: center;
+  gap: 10px;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 10px 15px;
+  border-radius: 9999px;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
 }
 
 @media (max-width: 768px) {
