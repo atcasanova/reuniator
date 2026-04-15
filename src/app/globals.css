@@ -196,26 +196,32 @@ h3 { font-size: 1.5rem; font-weight: 500; }
 }
 
 .floating-actions-mobile {
-  display: flex !important;
-  justify-content: center;
-  gap: 10px;
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  background: rgba(30, 41, 59, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 10px 15px;
-  border-radius: 9999px;
-  border: 1px solid var(--card-border);
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  display: none;
 }
 
 @media (max-width: 768px) {
   .layout-container {
     padding: 1rem;
+  }
+  .mobile-tabs {
+    margin-top: calc(env(safe-area-inset-top, 0px) + 4.5rem);
+  }
+  .floating-actions-mobile {
+    display: flex !important;
+    justify-content: center;
+    gap: 10px;
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 10px 15px;
+    border-radius: 9999px;
+    border: 1px solid var(--card-border);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
   }
   .glass-panel {
     padding: 1.25rem;

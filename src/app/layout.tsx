@@ -13,8 +13,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://reuniator.bru.to"),
   title: "Reuniator",
   description: "A beautiful, modern way to schedule events collaboratively.",
+  openGraph: {
+    title: "Reuniator",
+    description: "A beautiful, modern way to schedule events collaboratively.",
+    url: "https://reuniator.bru.to",
+    siteName: "Reuniator",
+    type: "website",
+    locale: "pt_BR",
+  },
 };
 
 export default function RootLayout({
