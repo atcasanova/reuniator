@@ -68,9 +68,13 @@ Crie um arquivo `.env` na raiz:
 
 ```env
 DATABASE_URL="file:./dev.db"
+ADMIN_USERNAME="admin"
+ADMIN_SESSION_SECRET="troque-por-um-segredo-longo-e-aleatorio"
 ```
 
-> Observação: com esse valor, o SQLite fica no arquivo `prisma/dev.db`.
+> Observação: com esse valor, o SQLite fica no arquivo `dev.db` na raiz do projeto.
+
+O painel administrativo ficará em `/admin`. No **primeiro acesso**, o sistema exige que você informe o `ADMIN_USERNAME` e defina a senha inicial.
 
 ### 4) Preparar banco e Prisma Client
 
@@ -147,6 +151,7 @@ Payload:
 - O nome do participante é salvo no `localStorage` para facilitar retorno ao evento.
 - O criador do evento também é marcado no `localStorage` para habilitar botão de copiar link.
 - A janela de horário aceita intervalos que atravessam meia-noite (ex.: `22:00` → `02:00`).
+- O script `cleanup_events.py` agora arquiva estatísticas dos eventos removidos na tabela `EventArchive`, permitindo métricas históricas no painel `/admin`.
 
 ## Próximas melhorias sugeridas
 

@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 
 type Participant = { id: string; name: string; availabilities: { date: string; time: string }[] };
 type EventDay = { id: string; date: string };
 type Event = { id: string; title: string; creatorName: string; timezone: string; timeRangeStart: string; timeRangeEnd: string; days: EventDay[]; participants: Participant[] };
+type HoverDetails = { time: string; date: string; available: string[]; unavailable: string[] };
 
 export default function EventPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const eventId = params.id as string;
+  const wantsAdminView = searchParams.get("admin") === "1";
 
   const [eventData, setEventData] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,32 +26,66 @@ export default function EventPage() {
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [dragMode, setDragMode] = useState<'add' | 'remove'>('add');
   const [saving, setSaving] = useState(false);
-  const [hoverStatus, setHoverStatus] = useState<{ visible: boolean, x: number, y: number, details: any } | null>(null);
+  const [hoverStatus, setHoverStatus] = useState<{ visible: boolean; x: number; y: number; details: HoverDetails } | null>(null);
   const [activeTab, setActiveTab] = useState<'yours' | 'group'>('yours');
   const [isCreator, setIsCreator] = useState(false);
   const [isPaintMode, setIsPaintMode] = useState(false);
+  const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
+  const [checkingAdminAuth, setCheckingAdminAuth] = useState(false);
+  const [forceParticipantMode, setForceParticipantMode] = useState(false);
+
+  const isAdminView = wantsAdminView && isAdminAuthorized && !forceParticipantMode;
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   // Polling data
-  const fetchEvent = async () => {
+  const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}`);
       if (!res.ok) throw new Error("Event not found");
       const data = await res.json();
       setEventData(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load event");
     } finally {
       setLoading(false);
     }
-  };
+  }, [eventId]);
 
   useEffect(() => {
     fetchEvent();
-  }, [eventId]);
+  }, [fetchEvent]);
+
+  useEffect(() => {
+    if (!wantsAdminView) {
+      return;
+    }
+
+    const checkAdminAuth = async () => {
+      try {
+        setCheckingAdminAuth(true);
+        const res = await fetch("/api/admin/status", { cache: "no-store" });
+        if (!res.ok) {
+          setIsAdminAuthorized(false);
+          return;
+        }
+
+        const data = await res.json();
+        setIsAdminAuthorized(Boolean(data.authenticated));
+        if (Boolean(data.authenticated)) {
+          setActiveTab("group");
+        }
+      } catch {
+        setIsAdminAuthorized(false);
+      } finally {
+        setCheckingAdminAuth(false);
+      }
+    };
+
+    checkAdminAuth();
+  }, [wantsAdminView]);
 
   useEffect(() => {
     setIsCreator(localStorage.getItem(`reuniator_creator_${eventId}`) === "true");
@@ -65,7 +102,7 @@ export default function EventPage() {
         setNameInput(savedName);
       }
     }
-  }, [eventData]);
+  }, [eventData, eventId]);
 
   const joinEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,15 +127,15 @@ export default function EventPage() {
   // Generate times
   const timeOptions = [];
   if (eventData) {
-    let [sh, sm] = eventData.timeRangeStart.split(":").map(Number);
-    let [eh, em] = eventData.timeRangeEnd.split(":").map(Number);
-    let currentMins = sh * 60 + sm;
+    const [sh, sm] = eventData.timeRangeStart.split(":").map(Number);
+    const [eh, em] = eventData.timeRangeEnd.split(":").map(Number);
+    const currentMins = sh * 60 + sm;
     let endMins = eh * 60 + em;
     if (endMins < currentMins) endMins += 24 * 60;
     
     for (let m = currentMins; m <= endMins; m += 15) {
-      let hh = Math.floor(m / 60) % 24;
-      let mm = m % 60;
+      const hh = Math.floor(m / 60) % 24;
+      const mm = m % 60;
       timeOptions.push(`${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`);
     }
   }
@@ -166,7 +203,7 @@ export default function EventPage() {
     fetchEvent();
   };
 
-  if (loading) return <div className="layout-container">Loading...</div>;
+  if (loading || checkingAdminAuth) return <div className="layout-container">Loading...</div>;
   if (error || !eventData) return <div className="layout-container">Error: {error}</div>;
 
   // Heatmap Aggregation
@@ -196,7 +233,7 @@ export default function EventPage() {
         Timezone: {eventData.timezone || "Local"}
       </p>
 
-      {!currentUser && (
+      {!currentUser && !isAdminView && (
         <div className="glass-panel animate-in" style={{ maxWidth: "400px", margin: "0 auto", marginBottom: "2rem" }}>
           <h2>Who are you?</h2>
           <form onSubmit={joinEvent}>
@@ -213,7 +250,7 @@ export default function EventPage() {
         </div>
       )}
 
-      {currentUser && (
+      {(currentUser || isAdminView) && (
         <>
           <div className="mobile-tabs animate-in">
             <button className={`btn-tab ${activeTab === 'yours' ? 'active' : ''}`} onClick={() => setActiveTab('yours')}>Your Availability</button>
@@ -225,7 +262,21 @@ export default function EventPage() {
             {/* Your Availability */}
             <div className={`glass-panel ${activeTab !== 'yours' ? 'hide-on-mobile' : ''}`} style={{ flex: "1 1 300px", maxWidth: "500px", width: "100%" }}>
             <h2 style={{ fontSize: "1.25rem", textAlign: "center", marginBottom: isCreator ? "0.5rem" : "1rem" }}>Your Availability</h2>
-            {isCreator && (
+            {isAdminView && !currentUser && (
+              <div style={{ marginBottom: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <p style={{ margin: 0, color: "var(--text-muted)" }}>
+                  Você está visualizando esta reunião no modo administrativo, sem se identificar como participante.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setForceParticipantMode(true)}
+                >
+                  Entrar como participante nesta reunião
+                </button>
+              </div>
+            )}
+            {!isAdminView && isCreator && (
               <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }}>
                 <button
                   onClick={(e) => {
@@ -240,6 +291,8 @@ export default function EventPage() {
                 </button>
               </div>
             )}
+            {!isAdminView && (
+              <>
             
             <div className="floating-actions-mobile hide-on-desktop">
               <button 
@@ -308,6 +361,8 @@ export default function EventPage() {
               ))}
             </div>
             {saving && <p style={{ textAlign: "center", fontSize: "0.9rem", color: "var(--accent)", marginTop: "1rem" }}>Saving...</p>}
+            </>
+            )}
           </div>
 
           {/* Group Heatmap */}
@@ -347,8 +402,6 @@ export default function EventPage() {
                     const unavailableNames = eventData.participants
                       .filter(p => !availableNames.includes(p.name))
                       .map(p => p.name);
-
-                    const tooltipText = `${d.date} às ${t}\nDisponíveis: ${availableNames.length ? availableNames.join(", ") : "Ninguém"}\nIndisponíveis: ${unavailableNames.length ? unavailableNames.join(", ") : "Ninguém"}`;
 
                     return (
                       <div

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
-export async function GET(request: Request, context: any) {
+export async function GET(request: Request, context: RouteContext<'/api/events/[id]'>) {
   try {
     const params = await context.params;
     const { id } = params;

@@ -4,6 +4,26 @@ import sys
 import datetime
 import os
 
+
+def ensure_archive_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS EventArchive (
+            id TEXT NOT NULL PRIMARY KEY,
+            originalEventId TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            creatorName TEXT NOT NULL,
+            timezone TEXT NOT NULL,
+            createdAt DATETIME NOT NULL,
+            lastScheduledDate TEXT,
+            participantCount INTEGER NOT NULL DEFAULT 0,
+            availabilityCount INTEGER NOT NULL DEFAULT 0,
+            maintenanceDeletedAt DATETIME NOT NULL
+        )
+        """
+    )
+
+
 def main():
     if len(sys.argv) != 2:
         print("Uso: python3 cleanup_events.py <caminho_para_o_banco_de_dados.db>")
@@ -21,6 +41,7 @@ def main():
         
         # Habilita suporte a chaves estrangeiras, caso o Prisma tenha configurado CASCADE a nível de banco
         cursor.execute("PRAGMA foreign_keys = ON")
+        ensure_archive_table(cursor)
 
         # Calcula a data de 5 dias atrás (formato YYYY-MM-DD igual ao do banco)
         data_limite_obj = datetime.date.today() - datetime.timedelta(days=5)
@@ -47,6 +68,50 @@ def main():
         # Para garantir a exclusão em cascata correta, excluímos primeiro as dependências manuais,
         # pois versões diferentes do SQLite/Prisma podem agir de forma inconsistente com PRAGMA isoladamente.
         for event_id in events_to_delete:
+            cursor.execute(
+                """
+                SELECT id, title, creatorName, timezone, createdAt
+                FROM Event
+                WHERE id = ?
+                """,
+                (event_id,),
+            )
+            event_row = cursor.fetchone()
+            if not event_row:
+                continue
+
+            cursor.execute("SELECT MAX(date) FROM EventDay WHERE eventId = ?", (event_id,))
+            last_scheduled_date = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM Participant WHERE eventId = ?", (event_id,))
+            participant_count = cursor.fetchone()[0]
+            cursor.execute(
+                "SELECT COUNT(*) FROM Availability WHERE participantId IN (SELECT id FROM Participant WHERE eventId = ?)",
+                (event_id,),
+            )
+            availability_count = cursor.fetchone()[0]
+
+            archive_id = f"archive-{event_id}"
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO EventArchive (
+                    id, originalEventId, title, creatorName, timezone, createdAt,
+                    lastScheduledDate, participantCount, availabilityCount, maintenanceDeletedAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    archive_id,
+                    event_row[0],
+                    event_row[1],
+                    event_row[2],
+                    event_row[3],
+                    event_row[4],
+                    last_scheduled_date,
+                    participant_count,
+                    availability_count,
+                    datetime.datetime.now().isoformat(timespec="seconds"),
+                ),
+            )
+
             # Apaga disponibilidades dos participantes deste evento
             cursor.execute("DELETE FROM Availability WHERE participantId IN (SELECT id FROM Participant WHERE eventId = ?)", (event_id,))
             # Apaga participantes
