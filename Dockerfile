@@ -62,4 +62,4 @@ EXPOSE 6742
 ENV PORT 6742
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["sh", "-c", "npx prisma db push && npm start"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && npm start"]

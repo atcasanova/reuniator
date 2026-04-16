@@ -100,6 +100,7 @@ docker compose up --build
 ```
 
 No compose atual, o container expõe a aplicação em `127.0.0.1:6742`.
+O arquivo SQLite é montado em `./dev.db -> /app/prisma/dev.db`, e o container executa `prisma db push --skip-generate` no startup para sincronizar o schema sem tentar reescrever o Prisma Client em runtime.
 
 ## Endpoints da API
 
