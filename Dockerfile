@@ -54,7 +54,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 # SQLite needs to write temporary files in the same directory as the database.
 # Give the nextjs user permissions to write to /app and /app/prisma.
-# RUN chown -R nextjs:nodejs /app
+RUN chown -R nextjs:nodejs /app/prisma/dev.db
 
 USER nextjs
 
