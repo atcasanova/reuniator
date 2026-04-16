@@ -45,7 +45,6 @@ function toErrorMessage(error: unknown, fallback: string): string {
 
 export default function AdminPage() {
   const [statusLoading, setStatusLoading] = useState(true);
-  const [adminUsername, setAdminUsername] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [requiresSetup, setRequiresSetup] = useState(false);
   const [username, setUsername] = useState("");
@@ -67,8 +66,6 @@ export default function AdminPage() {
         throw new Error(data.error ?? "Não foi possível carregar status.");
       }
 
-      setAdminUsername(data.adminUsername ?? "");
-      setUsername(data.adminUsername ?? "");
       setAuthenticated(Boolean(data.authenticated));
       setRequiresSetup(Boolean(data.requiresSetup));
     } catch (error: unknown) {
@@ -181,10 +178,7 @@ export default function AdminPage() {
       <div className="glass-panel animate-in" style={{ width: "100%", maxWidth: "1100px", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
           <div>
-            <h1 style={{ marginBottom: "0.25rem" }}>Painel Admin</h1>
-            <p style={{ margin: 0, color: "var(--text-muted)" }}>
-              Usuário administrativo configurado no ambiente: <strong>{adminUsername || "(não configurado)"}</strong>
-            </p>
+            <h1 style={{ margin: 0 }}>Painel Admin</h1>
           </div>
           {authenticated && (
             <button type="button" className="btn-secondary" onClick={handleLogout}>

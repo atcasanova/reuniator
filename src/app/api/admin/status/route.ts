@@ -3,11 +3,10 @@ import { getAdminSetupStatus, getAuthenticatedAdminUsername } from "@/lib/admin-
 
 export async function GET() {
   try {
-    const { adminUsername, requiresSetup } = await getAdminSetupStatus();
+    const { requiresSetup } = await getAdminSetupStatus();
     const authenticatedUsername = await getAuthenticatedAdminUsername();
 
     return NextResponse.json({
-      adminUsername,
       requiresSetup,
       authenticated: Boolean(authenticatedUsername),
     });
