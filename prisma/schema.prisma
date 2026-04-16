@@ -13,17 +13,17 @@ model Event {
   creatorName     String
   timezone        String         @default("UTC")
   createdAt       DateTime       @default(now())
-  timeRangeStart  String         // e.g., "08:00"
-  timeRangeEnd    String         // e.g., "20:00"
+  timeRangeStart  String
+  timeRangeEnd    String
   days            EventDay[]
   participants    Participant[]
 }
 
 model EventDay {
-  id        String   @id @default(uuid())
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  date      String   // "YYYY-MM-DD"
+  id      String @id @default(uuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date    String
 }
 
 model Participant {
@@ -35,11 +35,30 @@ model Participant {
 }
 
 model Availability {
-  id            String       @id @default(uuid())
+  id            String      @id @default(uuid())
   participantId String
-  participant   Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  date          String       // "YYYY-MM-DD"
-  time          String       // "HH:MM"
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  date          String
+  time          String
 
   @@unique([participantId, date, time])
+}
+
+model AdminCredential {
+  id           String   @id @default("singleton")
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}
+
+model EventArchive {
+  id                    String   @id @default(uuid())
+  originalEventId       String   @unique
+  title                 String
+  creatorName           String
+  timezone              String
+  createdAt             DateTime
+  lastScheduledDate     String?
+  participantCount      Int      @default(0)
+  availabilityCount     Int      @default(0)
+  maintenanceDeletedAt  DateTime
 }

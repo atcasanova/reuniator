@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import EventPageClient from "./event-page-client";
 
 type EventPageProps = {
   params: Promise<{ id: string }>;
 };
 
-const prisma = new PrismaClient();
 
 const defaultMeetingDescription =
   "Informe seus horários disponíveis e encontre o melhor horário para todos.";
