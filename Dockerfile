@@ -1,5 +1,5 @@
 FROM node:20-alpine AS base
-RUN apk add --no-cache libc6-compat openssl
+RUN apk add --no-cache libc6-compat openssl su-exec
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -50,16 +50,14 @@ COPY --from=builder /app/package.json ./package.json
 
 # Copy prisma schema for runtime schema queries if any, and the DB
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-#COPY --from=builder --chown=nextjs:nodejs /app/dev.db ./dev.db
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
-# SQLite needs to write temporary files in the same directory as the database.
-# Give the nextjs user permissions to write to /app and /app/prisma.
-RUN chown -R nextjs:nodejs /app/prisma/dev.db
-
-USER nextjs
+# Start as root to fix mounted SQLite permissions, then drop to nextjs.
+USER root
 
 EXPOSE 6742
 ENV PORT 6742
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate && npm start"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
