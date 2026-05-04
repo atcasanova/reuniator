@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
 type Participant = { id: string; name: string; availabilities: { date: string; time: string }[] };
@@ -33,11 +33,31 @@ export default function EventPage() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [checkingAdminAuth, setCheckingAdminAuth] = useState(false);
   const [forceParticipantMode, setForceParticipantMode] = useState(false);
+  const hoverHideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAdminView = wantsAdminView && isAdminAuthorized && !forceParticipantMode;
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const clearHoverHideTimeout = () => {
+    if (hoverHideTimeout.current) {
+      clearTimeout(hoverHideTimeout.current);
+      hoverHideTimeout.current = null;
+    }
+  };
+
+  const scheduleHoverHide = () => {
+    clearHoverHideTimeout();
+    hoverHideTimeout.current = setTimeout(() => {
+      setHoverStatus(prev => prev ? { ...prev, visible: false } : null);
+    }, 180);
+  };
+
+  const showHoverDetails = (x: number, y: number, details: HoverDetails) => {
+    clearHoverHideTimeout();
+    setHoverStatus({ visible: true, x, y, details });
   };
 
   // Polling data
@@ -57,6 +77,14 @@ export default function EventPage() {
   useEffect(() => {
     fetchEvent();
   }, [fetchEvent]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverHideTimeout.current) {
+        clearTimeout(hoverHideTimeout.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!wantsAdminView) {
@@ -220,6 +248,57 @@ export default function EventPage() {
   });
 
   const maxParticipants = Math.max(1, eventData.participants.length);
+
+  const padCalendarNumber = (value: number) => value.toString().padStart(2, "0");
+
+  const addMinutesToCalendarSlot = (dateStr: string, timeStr: string, minutes: number) => {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const [hour, minute] = timeStr.split(":").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, hour, minute + minutes));
+
+    return {
+      date: [
+        date.getUTCFullYear(),
+        padCalendarNumber(date.getUTCMonth() + 1),
+        padCalendarNumber(date.getUTCDate())
+      ].join("-"),
+      time: `${padCalendarNumber(date.getUTCHours())}:${padCalendarNumber(date.getUTCMinutes())}`
+    };
+  };
+
+  const getCalendarSlotDate = (dateStr: string, timeStr: string) => {
+    const [startHour, startMinute] = eventData.timeRangeStart.split(":").map(Number);
+    const [endHour, endMinute] = eventData.timeRangeEnd.split(":").map(Number);
+    const [slotHour, slotMinute] = timeStr.split(":").map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    const slotMinutes = slotHour * 60 + slotMinute;
+
+    if (endMinutes < startMinutes && slotMinutes < startMinutes) {
+      return addMinutesToCalendarSlot(dateStr, "00:00", 24 * 60).date;
+    }
+
+    return dateStr;
+  };
+
+  const formatGoogleCalendarDateTime = (dateStr: string, timeStr: string) => {
+    return `${dateStr.replaceAll("-", "")}T${timeStr.replace(":", "")}00`;
+  };
+
+  const buildGoogleCalendarUrl = (details: HoverDetails) => {
+    const timezone = eventData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    const startDate = getCalendarSlotDate(details.date, details.time);
+    const end = addMinutesToCalendarSlot(startDate, details.time, 15);
+    const dates = `${formatGoogleCalendarDateTime(startDate, details.time)}/${formatGoogleCalendarDateTime(end.date, end.time)}`;
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: eventData.title,
+      dates,
+      ctz: timezone
+    });
+
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  };
 
   return (
     <main 
@@ -407,24 +486,12 @@ export default function EventPage() {
                       <div
                         key={key}
                         onClick={(e) => {
-                          setHoverStatus({
-                            visible: true,
-                            x: e.clientX,
-                            y: e.clientY,
-                            details: { time: t, date: d.date, available: availableNames, unavailable: unavailableNames }
-                          });
+                          showHoverDetails(e.clientX, e.clientY, { time: t, date: d.date, available: availableNames, unavailable: unavailableNames });
                         }}
                         onMouseEnter={(e) => {
-                          setHoverStatus({
-                            visible: true,
-                            x: e.clientX,
-                            y: e.clientY,
-                            details: { time: t, date: d.date, available: availableNames, unavailable: unavailableNames }
-                          });
+                          showHoverDetails(e.clientX, e.clientY, { time: t, date: d.date, available: availableNames, unavailable: unavailableNames });
                         }}
-                        onMouseLeave={() => {
-                          setHoverStatus(prev => prev ? { ...prev, visible: false } : null);
-                        }}
+                        onMouseLeave={scheduleHoverHide}
                         style={{
                           width: "60px",
                           height: "36px",
@@ -457,13 +524,16 @@ export default function EventPage() {
       )}
 
       {hoverStatus && hoverStatus.visible && (
-        <div style={{
+        <div
+          onMouseEnter={clearHoverHideTimeout}
+          onMouseLeave={scheduleHoverHide}
+          style={{
           position: "fixed",
-          left: Math.min(hoverStatus.x + 15, typeof window !== 'undefined' ? window.innerWidth - 260 : 0) + "px",
-          top: Math.min(hoverStatus.y + 15, typeof window !== 'undefined' ? window.innerHeight - 200 : 0) + "px",
+          left: Math.min(hoverStatus.x + 15, typeof window !== 'undefined' ? window.innerWidth - 290 : 0) + "px",
+          top: Math.min(hoverStatus.y + 15, typeof window !== 'undefined' ? window.innerHeight - 260 : 0) + "px",
           zIndex: 9999,
-          pointerEvents: "none",
-          width: "250px",
+          pointerEvents: "auto",
+          width: "280px",
           padding: "1rem", 
           backgroundColor: "rgba(10, 10, 15, 0.95)", 
           backdropFilter: "blur(8px)", 
@@ -484,6 +554,23 @@ export default function EventPage() {
               <strong style={{ color: "var(--danger)" }}>Indisponíveis ({hoverStatus.details.unavailable.length}):</strong><br/>
               <span style={{ color: "var(--text-muted)", wordBreak: "break-word" }}>{hoverStatus.details.unavailable.length ? hoverStatus.details.unavailable.join(", ") : "Ninguém"}</span>
            </div>
+           <a
+             href={buildGoogleCalendarUrl(hoverStatus.details)}
+             target="_blank"
+             rel="noopener noreferrer"
+             className="btn-primary"
+             style={{
+               marginTop: "0.75rem",
+               width: "100%",
+               minHeight: "40px",
+               padding: "0.55rem 0.75rem",
+               borderRadius: "8px",
+               fontSize: "0.9rem",
+               textDecoration: "none"
+             }}
+           >
+             Criar na Agenda
+           </a>
         </div>
       )}
     </main>
