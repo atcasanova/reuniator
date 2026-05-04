@@ -24,6 +24,50 @@ def ensure_archive_table(cursor):
     )
 
 
+def to_prisma_datetime_ms(value):
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return int(value)
+
+    value_str = str(value).strip()
+    if not value_str:
+        return None
+
+    try:
+        return int(float(value_str))
+    except ValueError:
+        pass
+
+    normalized = value_str.replace("Z", "+00:00")
+    try:
+        parsed = datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        return value
+
+    return int(parsed.timestamp() * 1000)
+
+
+def normalize_archive_dates(cursor):
+    cursor.execute("SELECT id, createdAt, maintenanceDeletedAt FROM EventArchive")
+    rows = cursor.fetchall()
+
+    for archive_id, created_at, maintenance_deleted_at in rows:
+        normalized_created_at = to_prisma_datetime_ms(created_at)
+        normalized_maintenance_deleted_at = to_prisma_datetime_ms(maintenance_deleted_at)
+
+        if normalized_created_at != created_at or normalized_maintenance_deleted_at != maintenance_deleted_at:
+            cursor.execute(
+                """
+                UPDATE EventArchive
+                SET createdAt = ?, maintenanceDeletedAt = ?
+                WHERE id = ?
+                """,
+                (normalized_created_at, normalized_maintenance_deleted_at, archive_id),
+            )
+
+
 def main():
     if len(sys.argv) != 2:
         print("Uso: python3 cleanup_events.py <caminho_para_o_banco_de_dados.db>")
@@ -42,6 +86,8 @@ def main():
         # Habilita suporte a chaves estrangeiras, caso o Prisma tenha configurado CASCADE a nível de banco
         cursor.execute("PRAGMA foreign_keys = ON")
         ensure_archive_table(cursor)
+        normalize_archive_dates(cursor)
+        conn.commit()
 
         # Calcula a data de 5 dias atrás (formato YYYY-MM-DD igual ao do banco)
         data_limite_obj = datetime.date.today() - datetime.timedelta(days=5)
@@ -108,7 +154,7 @@ def main():
                     last_scheduled_date,
                     participant_count,
                     availability_count,
-                    datetime.datetime.now().isoformat(timespec="seconds"),
+                    int(datetime.datetime.now().timestamp() * 1000),
                 ),
             )
 
