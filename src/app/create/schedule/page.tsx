@@ -3,6 +3,14 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 function ScheduleConfigurator() {
   const defaultTimeRangeStart = "09:00";
   const defaultTimeRangeEnd = "17:00";
@@ -29,6 +37,10 @@ function ScheduleConfigurator() {
     return d;
   });
 
+  const today = new Date();
+  const todayDateStr = formatLocalDate(today);
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
   // Generate monthly calendar
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -36,6 +48,10 @@ function ScheduleConfigurator() {
   const startDay = new Date(year, month, 1).getDay(); // 0 = Sunday
 
   const toggleDate = (dateStr: string) => {
+    if (dateStr < todayDateStr) {
+      return;
+    }
+
     const newDates = new Set(selectedDates);
     if (newDates.has(dateStr)) {
       newDates.delete(dateStr);
@@ -50,7 +66,13 @@ function ScheduleConfigurator() {
   };
   
   const prevMonth = () => {
-    setCurrentDate(new Date(year, month - 1, 1));
+    const previousMonth = new Date(year, month - 1, 1);
+
+    if (previousMonth < currentMonthStart) {
+      return;
+    }
+
+    setCurrentDate(previousMonth);
   };
 
   const handleCreate = async () => {
@@ -105,6 +127,7 @@ function ScheduleConfigurator() {
   const endOptions = timeOptions.filter((t) => t >= timeRangeStart);
   const hasCustomTimeRange =
     timeRangeStart !== defaultTimeRangeStart || timeRangeEnd !== defaultTimeRangeEnd;
+  const canGoToPreviousMonth = new Date(year, month - 1, 1) >= currentMonthStart;
 
   useEffect(() => {
     if (timeRangeStart > timeRangeEnd) {
@@ -132,11 +155,26 @@ function ScheduleConfigurator() {
           {/* Calendar Section */}
           <div style={{ flex: "1 1 300px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <button onClick={prevMonth} className="btn-secondary" style={{ padding: "0.5rem 1rem" }}>&larr;</button>
+              <button
+                onClick={prevMonth}
+                className="btn-secondary"
+                disabled={!canGoToPreviousMonth}
+                aria-label="Previous month"
+                style={{ padding: "0.5rem 1rem" }}
+              >
+                &larr;
+              </button>
               <h3 style={{ margin: 0 }}>
                 {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
               </h3>
-              <button onClick={nextMonth} className="btn-secondary" style={{ padding: "0.5rem 1rem" }}>&rarr;</button>
+              <button
+                onClick={nextMonth}
+                className="btn-secondary"
+                aria-label="Next month"
+                style={{ padding: "0.5rem 1rem" }}
+              >
+                &rarr;
+              </button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "5px", textAlign: "center" }}>
@@ -155,26 +193,38 @@ function ScheduleConfigurator() {
                 const monthStr = String(month + 1).padStart(2, '0');
                 const dateStr = `${year}-${monthStr}-${dayStr}`;
                 const isSelected = selectedDates.has(dateStr);
+                const isPastDate = dateStr < todayDateStr;
+                const isToday = dateStr === todayDateStr;
                 
                 return (
-                  <div 
+                  <button
+                    type="button"
                     key={dateStr}
                     onClick={() => toggleDate(dateStr)}
+                    disabled={isPastDate}
+                    aria-pressed={isSelected}
+                    aria-label={`${dateStr}${isToday ? " (today)" : ""}${isPastDate ? " unavailable" : ""}`}
                     style={{
                       aspectRatio: "1",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      cursor: "pointer",
+                      cursor: isPastDate ? "not-allowed" : "pointer",
                       borderRadius: "8px",
-                      background: isSelected ? "var(--primary)" : "rgba(255, 255, 255, 0.05)",
-                      color: isSelected ? "white" : "inherit",
+                      background: isSelected
+                        ? "var(--primary)"
+                        : isToday
+                          ? "rgba(56, 189, 248, 0.18)"
+                          : "rgba(255, 255, 255, 0.05)",
+                      color: isPastDate ? "var(--text-muted)" : isSelected ? "white" : "inherit",
+                      opacity: isPastDate ? 0.35 : 1,
                       transition: "all 0.2s ease",
-                      border: "1px solid var(--card-border)"
+                      border: isToday ? "1px solid var(--accent)" : "1px solid var(--card-border)",
+                      font: "inherit"
                     }}
                   >
                     {i + 1}
-                  </div>
+                  </button>
                 );
               })}
             </div>

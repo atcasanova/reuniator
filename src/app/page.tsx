@@ -28,6 +28,15 @@ export default function Home() {
           Find the best time for everyone to meet, effortlessly.
         </p>
 
+        <section className="sr-only" aria-label="Sobre o Reuniator">
+          <h2>Agendamento colaborativo de reuniões e eventos</h2>
+          <p>
+            O Reuniator ajuda grupos a escolher a melhor data e horário para reuniões,
+            encontros, aulas, jogos e eventos. Crie uma enquete de disponibilidade,
+            compartilhe o link com os participantes e veja rapidamente quando todos podem participar.
+          </p>
+        </section>
+
         <form onSubmit={handleNext} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div>
             <label htmlFor="title">Event Title</label>
