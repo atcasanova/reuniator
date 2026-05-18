@@ -244,3 +244,24 @@ h3 { font-size: 1.5rem; font-weight: 500; }
 .heat-3 { background-color: rgba(16, 185, 129, 0.6); }
 .heat-4 { background-color: rgba(16, 185, 129, 0.8); }
 .heat-5 { background-color: rgba(16, 185, 129, 1.0); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-secondary:disabled:hover {
+  background: transparent;
+}

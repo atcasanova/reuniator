@@ -1,28 +1,40 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://reuniator.bru.to"),
-  title: "Reuniator",
-  description: "A beautiful, modern way to schedule events collaboratively.",
+  title: "Reuniator | Encontre o melhor horário para reuniões",
+  description:
+    "Crie enquetes de disponibilidade, compartilhe um link e descubra a melhor data e horário para reuniões, eventos e encontros em grupo.",
+  keywords: [
+    "agendar reunião",
+    "marcar reunião",
+    "enquete de disponibilidade",
+    "organizar encontro",
+    "planejar evento",
+    "agenda colaborativa",
+    "melhor horário para reunião",
+    "Reuniator",
+  ],
   openGraph: {
-    title: "Reuniator",
-    description: "A beautiful, modern way to schedule events collaboratively.",
+    title: "Reuniator | Encontre o melhor horário para reuniões",
+    description:
+      "Crie enquetes de disponibilidade, compartilhe um link e descubra a melhor data e horário para reuniões, eventos e encontros em grupo.",
     url: "https://reuniator.bru.to",
     siteName: "Reuniator",
     type: "website",
     locale: "pt_BR",
+  },
+  twitter: {
+    card: "summary",
+    title: "Reuniator | Encontre o melhor horário para reuniões",
+    description:
+      "Crie enquetes de disponibilidade, compartilhe um link e descubra a melhor data e horário para reuniões, eventos e encontros em grupo.",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
@@ -32,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="pt-BR">
       <body>{children}</body>
     </html>
   );
