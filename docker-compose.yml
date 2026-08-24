@@ -11,5 +11,9 @@ services:
       - ./dev.db:/app/prisma/dev.db
     environment:
       - NODE_ENV=production
+      - TURNSTILE_ENABLED=${TURNSTILE_ENABLED:-false}
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
+      - TURNSTILE_SECRET=${TURNSTILE_SECRET:-}
+      - TURNSTILE_HOSTNAMES=${TURNSTILE_HOSTNAMES:-reuniator.bru.to}
     env_file:
       - .env

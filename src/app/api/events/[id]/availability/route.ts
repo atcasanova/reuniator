@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+import { participantCookieConfig, verifyParticipantSessionToken } from "@/lib/turnstile";
 
 
 export async function POST(request: Request, context: RouteContext<'/api/events/[id]/availability'>) {
@@ -21,6 +23,15 @@ export async function POST(request: Request, context: RouteContext<'/api/events/
 
     if (!participant || participant.eventId !== id) {
       return NextResponse.json({ error: "Participant not found or invalid event" }, { status: 404 });
+    }
+
+    const cookieStore = await cookies();
+    const participantSession = cookieStore.get(participantCookieConfig.name)?.value;
+    if (!verifyParticipantSessionToken(participantSession, id, participantId)) {
+      return NextResponse.json(
+        { error: "Human verification is required before marking availability" },
+        { status: 403 }
+      );
     }
 
     // Overwrite all availabilities for this participant

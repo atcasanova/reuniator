@@ -1,7 +1,18 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import TurnstileWidget from "@/components/turnstile-widget";
+
+type TurnstileConfig = {
+  enabled: boolean;
+  configured: boolean;
+  siteKey: string;
+  actions: {
+    createEvent: string;
+    joinEvent: string;
+  };
+};
 
 const formatLocalDate = (date: Date) => {
   const year = date.getFullYear();
@@ -30,6 +41,9 @@ function ScheduleConfigurator() {
   const [timeRangeEnd, setTimeRangeEnd] = useState(defaultTimeRangeEnd);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [turnstileConfig, setTurnstileConfig] = useState<TurnstileConfig | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
 
   const [currentDate, setCurrentDate] = useState(() => {
     const d = new Date();
@@ -40,6 +54,8 @@ function ScheduleConfigurator() {
   const today = new Date();
   const todayDateStr = formatLocalDate(today);
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const turnstileRequired = Boolean(turnstileConfig?.enabled);
+  const turnstileUnavailable = turnstileRequired && !turnstileConfig?.configured;
 
   // Generate monthly calendar
   const year = currentDate.getFullYear();
@@ -80,6 +96,16 @@ function ScheduleConfigurator() {
       setError("Please select at least one date.");
       return;
     }
+
+    if (turnstileUnavailable) {
+      setError("A verificação de segurança está indisponível. Tente novamente mais tarde.");
+      return;
+    }
+
+    if (turnstileRequired && !turnstileToken) {
+      setError("Conclua a verificação de segurança antes de criar a reunião.");
+      return;
+    }
     
     setIsSubmitting(true);
     setError("");
@@ -95,11 +121,14 @@ function ScheduleConfigurator() {
           timeRangeStart,
           timeRangeEnd,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          turnstileToken,
+          turnstileAction: turnstileConfig?.actions.createEvent,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create event");
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Failed to create event");
       }
 
       const data = await response.json();
@@ -107,11 +136,16 @@ function ScheduleConfigurator() {
       localStorage.setItem(`reuniator_creator_${data.id}`, "true");
       
       router.push(`/event/${data.id}`);
-    } catch {
-      setError("Something went wrong while creating the event.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong while creating the event.");
+      setTurnstileResetSignal(signal => signal + 1);
       setIsSubmitting(false);
     }
   };
+
+  const handleTurnstileTokenChange = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
 
   // Generate 15-min time options
   const timeOptions = [];
@@ -134,6 +168,31 @@ function ScheduleConfigurator() {
       setTimeRangeEnd(timeRangeStart);
     }
   }, [timeRangeStart, timeRangeEnd]);
+
+  useEffect(() => {
+    const fetchTurnstileConfig = async () => {
+      try {
+        const response = await fetch("/api/turnstile/config", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to load Turnstile config");
+        }
+
+        setTurnstileConfig(await response.json());
+      } catch {
+        setTurnstileConfig({
+          enabled: true,
+          configured: false,
+          siteKey: "",
+          actions: {
+            createEvent: "create_event",
+            joinEvent: "join_event",
+          },
+        });
+      }
+    };
+
+    fetchTurnstileConfig();
+  }, []);
 
   const resetTimeRange = () => {
     setTimeRangeStart(defaultTimeRangeStart);
@@ -267,13 +326,28 @@ function ScheduleConfigurator() {
             </button>
 
             <div style={{ flexGrow: 1 }} />
+
+            {turnstileConfig?.enabled && turnstileConfig.configured && (
+              <TurnstileWidget
+                siteKey={turnstileConfig.siteKey}
+                action={turnstileConfig.actions.createEvent}
+                resetSignal={turnstileResetSignal}
+                onTokenChange={handleTurnstileTokenChange}
+              />
+            )}
+
+            {turnstileUnavailable && (
+              <p style={{ color: "var(--danger)", fontSize: "0.875rem" }}>
+                A verificação de segurança está indisponível. Tente novamente mais tarde.
+              </p>
+            )}
             
             {error && <p style={{ color: "var(--danger)", fontSize: "0.875rem" }}>{error}</p>}
             
             <button 
               onClick={handleCreate} 
               className="btn-primary" 
-              disabled={isSubmitting}
+              disabled={isSubmitting || turnstileUnavailable || turnstileConfig === null}
               style={{ width: "100%", padding: "1rem" }}
             >
               {isSubmitting ? "Creating..." : "Create Event"}

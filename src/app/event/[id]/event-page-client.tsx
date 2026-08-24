@@ -2,11 +2,21 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import TurnstileWidget from "@/components/turnstile-widget";
 
 type Participant = { id: string; name: string; availabilities: { date: string; time: string }[] };
 type EventDay = { id: string; date: string };
 type Event = { id: string; title: string; creatorName: string; timezone: string; timeRangeStart: string; timeRangeEnd: string; days: EventDay[]; participants: Participant[] };
 type HoverDetails = { time: string; date: string; available: string[]; unavailable: string[] };
+type TurnstileConfig = {
+  enabled: boolean;
+  configured: boolean;
+  siteKey: string;
+  actions: {
+    createEvent: string;
+    joinEvent: string;
+  };
+};
 
 export default function EventPage() {
   const params = useParams();
@@ -33,9 +43,17 @@ export default function EventPage() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [checkingAdminAuth, setCheckingAdminAuth] = useState(false);
   const [forceParticipantMode, setForceParticipantMode] = useState(false);
+  const [availabilityViewParticipantId, setAvailabilityViewParticipantId] = useState("");
+  const [turnstileConfig, setTurnstileConfig] = useState<TurnstileConfig | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
+  const [joinError, setJoinError] = useState("");
+  const [requiresHumanValidation, setRequiresHumanValidation] = useState(false);
   const hoverHideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAdminView = wantsAdminView && isAdminAuthorized && !forceParticipantMode;
+  const turnstileRequired = Boolean(turnstileConfig?.enabled);
+  const turnstileUnavailable = turnstileRequired && !turnstileConfig?.configured;
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -77,6 +95,31 @@ export default function EventPage() {
   useEffect(() => {
     fetchEvent();
   }, [fetchEvent]);
+
+  useEffect(() => {
+    const fetchTurnstileConfig = async () => {
+      try {
+        const res = await fetch("/api/turnstile/config", { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("Failed to load Turnstile config");
+        }
+
+        setTurnstileConfig(await res.json());
+      } catch {
+        setTurnstileConfig({
+          enabled: true,
+          configured: false,
+          siteKey: "",
+          actions: {
+            createEvent: "create_event",
+            joinEvent: "join_event",
+          },
+        });
+      }
+    };
+
+    fetchTurnstileConfig();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -121,7 +164,7 @@ export default function EventPage() {
     const savedName = localStorage.getItem('reuniator_name');
     if (savedName && eventData) {
       const p = eventData.participants.find(p => p.name === savedName);
-      if (p) {
+      if (p && !requiresHumanValidation) {
         setCurrentUser({ id: p.id, name: p.name });
         const userCells = new Set<string>();
         p.availabilities.forEach(a => userCells.add(`${a.date}T${a.time}`));
@@ -130,27 +173,64 @@ export default function EventPage() {
         setNameInput(savedName);
       }
     }
-  }, [eventData, eventId]);
+  }, [eventData, eventId, requiresHumanValidation]);
+
+  useEffect(() => {
+    if (!eventData || !availabilityViewParticipantId) {
+      return;
+    }
+
+    const participantStillExists = eventData.participants.some(
+      participant => participant.id === availabilityViewParticipantId
+    );
+
+    if (!participantStillExists) {
+      setAvailabilityViewParticipantId("");
+    }
+  }, [availabilityViewParticipantId, eventData]);
 
   const joinEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameInput.trim()) return;
+    if (turnstileUnavailable) {
+      setJoinError("A verificação de segurança está indisponível. Tente novamente mais tarde.");
+      return;
+    }
+    if (turnstileRequired && !turnstileToken) {
+      setJoinError("Conclua a verificação de segurança antes de entrar.");
+      return;
+    }
+
+    setJoinError("");
     try {
       const res = await fetch(`/api/events/${eventId}/participants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nameInput.trim() })
+        body: JSON.stringify({
+          name: nameInput.trim(),
+          turnstileToken,
+          turnstileAction: turnstileConfig?.actions.joinEvent,
+        })
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to join.");
+      }
       if (data.participant) {
         localStorage.setItem(`reuniator_name`, data.participant.name);
         setCurrentUser({ id: data.participant.id, name: data.participant.name });
+        setRequiresHumanValidation(false);
         fetchEvent();
       }
-    } catch {
-      alert("Failed to join.");
+    } catch (err: unknown) {
+      setJoinError(err instanceof Error ? err.message : "Failed to join.");
+      setTurnstileResetSignal(signal => signal + 1);
     }
   };
+
+  const handleTurnstileTokenChange = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
 
   // Generate times
   const timeOptions = [];
@@ -221,24 +301,43 @@ export default function EventPage() {
       return { date: d, time: t };
     });
     
-    await fetch(`/api/events/${eventId}/availability`, {
+    const response = await fetch(`/api/events/${eventId}/availability`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ participantId: currentUser.id, availabilities: arr })
     });
     
     setSaving(false);
+    if (response.status === 403) {
+      setRequiresHumanValidation(true);
+      setCurrentUser(null);
+      setJoinError("Valide que você é humano antes de marcar sua disponibilidade.");
+      return;
+    }
+
+    if (!response.ok) {
+      alert("Não foi possível salvar sua disponibilidade.");
+      return;
+    }
+
     fetchEvent();
   };
 
   if (loading || checkingAdminAuth) return <div className="layout-container">Loading...</div>;
   if (error || !eventData) return <div className="layout-container">Error: {error}</div>;
 
+  const visibleParticipants = availabilityViewParticipantId
+    ? eventData.participants.filter(participant => participant.id === availabilityViewParticipantId)
+    : eventData.participants;
+  const selectedAvailabilityParticipant = availabilityViewParticipantId
+    ? eventData.participants.find(participant => participant.id === availabilityViewParticipantId) || null
+    : null;
+
   // Heatmap Aggregation
   const heatmapCounts: Record<string, number> = {};
   const heatmapUsers: Record<string, string[]> = {};
   
-  eventData.participants.forEach(p => {
+  visibleParticipants.forEach(p => {
     p.availabilities.forEach(a => {
       const key = `${a.date}T${a.time}`;
       heatmapCounts[key] = (heatmapCounts[key] || 0) + 1;
@@ -247,7 +346,7 @@ export default function EventPage() {
     });
   });
 
-  const maxParticipants = Math.max(1, eventData.participants.length);
+  const maxParticipants = Math.max(1, visibleParticipants.length);
 
   const padCalendarNumber = (value: number) => value.toString().padStart(2, "0");
 
@@ -322,7 +421,32 @@ export default function EventPage() {
               placeholder="Enter your name to vote" 
               autoFocus
             />
-            <button type="submit" className="btn-primary" style={{ marginTop: "1rem", width: "100%" }}>
+            {turnstileConfig?.enabled && turnstileConfig.configured && (
+              <div style={{ marginTop: "1rem" }}>
+                <TurnstileWidget
+                  siteKey={turnstileConfig.siteKey}
+                  action={turnstileConfig.actions.joinEvent}
+                  resetSignal={turnstileResetSignal}
+                  onTokenChange={handleTurnstileTokenChange}
+                />
+              </div>
+            )}
+            {turnstileUnavailable && (
+              <p style={{ color: "var(--danger)", fontSize: "0.875rem", marginTop: "1rem" }}>
+                A verificação de segurança está indisponível. Tente novamente mais tarde.
+              </p>
+            )}
+            {joinError && (
+              <p style={{ color: "var(--danger)", fontSize: "0.875rem", marginTop: "1rem" }}>
+                {joinError}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={turnstileConfig === null || turnstileUnavailable}
+              style={{ marginTop: "1rem", width: "100%" }}
+            >
               Sign In
             </button>
           </form>
@@ -453,8 +577,29 @@ export default function EventPage() {
               </button>
             </h2>
             <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-              {eventData.participants.length} Participant{eventData.participants.length !== 1 ? 's' : ''}
+              {selectedAvailabilityParticipant
+                ? `Mostrando horários de ${selectedAvailabilityParticipant.name}`
+                : `${eventData.participants.length} Participant${eventData.participants.length !== 1 ? 's' : ''}`}
             </p>
+
+            <div style={{ maxWidth: "360px", margin: "0 auto 1rem" }}>
+              <label htmlFor="availability-view-participant" style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Visualizar disponibilidade
+              </label>
+              <select
+                id="availability-view-participant"
+                value={availabilityViewParticipantId}
+                onChange={event => setAvailabilityViewParticipantId(event.target.value)}
+                style={{ minHeight: "44px", padding: "0.75rem 1rem", fontSize: "1rem" }}
+              >
+                <option value="">Todos os participantes</option>
+                {eventData.participants.map(participant => (
+                  <option key={participant.id} value={participant.id}>
+                    {participant.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div style={{ display: "flex", justifyContent: "center" }}>
               <div style={{ overflowX: "auto", paddingBottom: "10px", flex: "1 1 min-content", maxWidth: "100%" }}>
@@ -478,7 +623,7 @@ export default function EventPage() {
                     const ratio = count / maxParticipants;
                     
                     const availableNames = heatmapUsers[key] || [];
-                    const unavailableNames = eventData.participants
+                    const unavailableNames = visibleParticipants
                       .filter(p => !availableNames.includes(p.name))
                       .map(p => p.name);
 
